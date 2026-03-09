@@ -1,0 +1,28 @@
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import (
+    SpareViewSet,
+    PartNumberViewSet,
+    SAPCatalogViewSet,
+    CentroAlmacenViewSet,
+    DashboardStatsView,
+    DashboardTimelineView,
+    ImportSpareCSVView,
+    ImportSAPXLSXView,
+    RMAViewSet,
+)
+
+router = DefaultRouter()
+router.register(r'items',        SpareViewSet,         basename='spare')
+router.register(r'sap-catalog',  SAPCatalogViewSet,    basename='sap-catalog')
+router.register(r'centros',      CentroAlmacenViewSet, basename='centros')
+router.register(r'part-numbers', PartNumberViewSet,    basename='part-numbers')
+router.register(r'rma',          RMAViewSet,           basename='rma')
+
+urlpatterns = [
+    path('', include(router.urls)),
+    path('dashboard/stats/',    DashboardStatsView.as_view(),    name='dashboard-stats'),
+    path('dashboard/timeline/', DashboardTimelineView.as_view(), name='dashboard-timeline'),
+    path('import/csv/',         ImportSpareCSVView.as_view(),    name='import-spare-csv'),
+    path('import/xlsx/',        ImportSAPXLSXView.as_view(),     name='import-sap-xlsx'),
+]
