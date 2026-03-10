@@ -11,13 +11,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 import pandas as pd
 import io
 
-from .models import Spare, SAPCatalog, CentroAlmacen, SAPMaterial, PartNumber, RMA
+from .models import Spare, SAPCatalog, CentroAlmacen, SAPMaterial, PartNumber, RMA, StockSAP
 from .serializers import (
     PartNumberSerializer,
     SpareSerializer, SpareListSerializer,
     SAPCatalogSerializer, CentroAlmacenSerializer,
     SAPMaterialSerializer, DashboardStatsSerializer,
     RMASerializer,
+    StockSAPSerializer,
 )
 from .filters import SpareFilter
 
@@ -223,6 +224,49 @@ class RMAViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'estado', 'fecha_inicio_rma']
     ordering = ['-created_at']
 
+
+
+
+# ─── Stock SAP ─────────────────────────────────────────────────────────────────
+class StockSAPViewSet(viewsets.ModelViewSet):
+    queryset = StockSAP.objects.all()
+    serializer_class = StockSAPSerializer
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['material', 'descripcion', 'lote', 'centro', 'almacen']
+    ordering_fields = ['material', 'stock', 'centro', 'almacen']
+    pagination_class = PageNumberPagination
+
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser])
+    def import_xlsx(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'No se envió archivo.'}, status=400)
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+        created, errors = 0, []
+        for _, row in df.iterrows():
+            try:
+                StockSAP.objects.create(
+                    material=safe_str(row.get('Material') or row.get('material')) or '',
+                    descripcion=safe_str(row.get('Descripcion') or row.get('Descripción')),
+                    stock=float(row.get('Suma de Stock disponible') or row.get('stock') or 0),
+                    lote=safe_str(row.get('Lote') or row.get('lote')),
+                    centro=safe_str(row.get('Centro') or row.get('centro')),
+                    almacen=safe_str(row.get('Almacén') or row.get('Almacen') or row.get('almacen')),
+                    unidad_medida=safe_str(row.get('Unidad medida base') or row.get('unidad_medida')),
+                )
+                created += 1
+            except Exception as e:
+                errors.append(str(e))
+        return Response({'imported': created, 'errors': len(errors), 'error_details': errors[:5]})
+
+    @action(detail=False, methods=['delete'])
+    def clear_all(self, request):
+        count, _ = StockSAP.objects.all().delete()
+        return Response({'deleted': count})
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 

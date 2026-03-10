@@ -55,3 +55,11 @@ export const deletePartNumber    = (id)       => api.delete(`/part-numbers/${id}
 export const lookupPartNumber    = (pn)       => api.get('/part-numbers/lookup/', { params: { part_number: pn } })
 export const lookupPartNumberBySAP = (sap)     => api.get('/part-numbers/lookup-by-sap/', { params: { sap } })
 export const getByProveedor      = (p)        => api.get('/part-numbers/by-proveedor/', { params: { proveedor: p } })
+
+// Stock SAP
+export const getStockSAP       = (params) => api.get('/stock-sap/', { params })
+export const importStockSAPXLS = (file)   => {
+  const fd = new FormData(); fd.append('file', file)
+  return api.post('/stock-sap/import_xlsx/', fd, { headers:{ 'Content-Type':'multipart/form-data' } })
+}
+export const clearStockSAP     = ()       => api.delete('/stock-sap/clear_all/')

@@ -4,7 +4,8 @@ import { Search, Plus, FileUp, Edit2, Trash2, X, Check, Upload } from 'lucide-re
 import {
   getSAPCatalog, createSAPItem, updateSAPItem, deleteSAPItem, bulkImportSAP,
   getCentroAlmacen, createCentroAlm, updateCentroAlm, deleteCentroAlm,
-  getPartNumbers, createPartNumber, updatePartNumber, deletePartNumber
+  getPartNumbers, createPartNumber, updatePartNumber, deletePartNumber,
+  getStockSAP, importStockSAPXLS, clearStockSAP
 } from '../services/api'
 
 const SAP_FIELDS = [
@@ -793,6 +794,153 @@ function PartNumbersTab() {
   )
 }
 
+
+// ── Stock SAP Logon Tab ────────────────────────────────────────────────────────
+function StockSAPTab() {
+  const [items, setItems]         = useState([])
+  const [count, setCount]         = useState(0)
+  const [page, setPage]           = useState(1)
+  const [search, setSearch]       = useState('')
+  const [loading, setLoading]     = useState(true)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+  const PAGE_SIZE = 50
+
+  const load = useCallback(() => {
+    setLoading(true)
+    getStockSAP({ page, page_size: PAGE_SIZE, search: search || undefined })
+      .then(r => {
+        const d = r.data
+        if (Array.isArray(d)) { setItems(d); setCount(d.length) }
+        else { setItems(d.results || []); setCount(d.count || 0) }
+      })
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }, [page, search])
+
+  useEffect(() => { load() }, [load])
+
+  const handleImport = async (file) => {
+    setImporting(true); setImportResult(null)
+    try { const r = await importStockSAPXLS(file); setImportResult(r.data); load() }
+    catch(e) { setImportResult({ error: e.response?.data?.error || e.message }) }
+    finally { setImporting(false) }
+  }
+
+  const handleClear = async () => {
+    if (!confirm('¿Eliminar TODOS los registros de Stock SAP? Esta acción no se puede deshacer.')) return
+    await clearStockSAP(); load()
+  }
+
+  const pages = Math.ceil(count / PAGE_SIZE) || 1
+
+  const COLS = [
+    { key:'material',      label:'Material',     mono:true,  color:'#7c3aed' },
+    { key:'descripcion',   label:'Descripción',  wide:true  },
+    { key:'stock',         label:'Stock',        num:true   },
+    { key:'lote',          label:'Lote'                     },
+    { key:'centro',        label:'Centro',       mono:true  },
+    { key:'almacen',       label:'Almacén',      mono:true  },
+    { key:'unidad_medida', label:'UM'                       },
+  ]
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{ display:'flex', gap:10, marginBottom:16, alignItems:'center', flexWrap:'wrap' }}>
+        <div style={{ position:'relative', flex:1, minWidth:200 }}>
+          <Search size={13} style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:'#9ca3af' }}/>
+          <input className="input" style={{ paddingLeft:30, fontSize:13 }}
+            placeholder="Buscar material, descripción, centro…"
+            value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+        </div>
+        <span style={{ fontSize:12, color:'#6b7280', whiteSpace:'nowrap' }}>{count.toLocaleString()} registros</span>
+        <label className="btn-ghost" style={{ cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
+          <Upload size={14}/> {importing ? 'Importando…' : 'Importar Excel SAP Logon'}
+          <input type="file" accept=".xlsx,.xls" style={{ display:'none' }}
+            onChange={e => { if (e.target.files[0]) handleImport(e.target.files[0]); e.target.value='' }} />
+        </label>
+        {items.length > 0 && (
+          <button className="btn-ghost" style={{ fontSize:13, color:'#dc2626', display:'flex', alignItems:'center', gap:5 }}
+            onClick={handleClear}>
+            <Trash2 size={13}/> Limpiar todo
+          </button>
+        )}
+      </div>
+
+      {importResult && (
+        <div style={{ marginBottom:12, padding:'8px 14px', borderRadius:8, fontSize:12,
+          background: importResult.error ? '#fef2f2' : '#f0fdf4',
+          color: importResult.error ? '#dc2626' : '#15803d',
+          border: `1px solid ${importResult.error ? '#fecaca' : '#bbf7d0'}` }}>
+          {importResult.error
+            ? `Error: ${importResult.error}`
+            : `✓ ${importResult.imported} registros importados · ${importResult.errors} errores`}
+        </div>
+      )}
+
+      <div className="card overflow-hidden">
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead>
+              <tr style={{ background:'#f9fafb', borderBottom:'1px solid #e5e7eb' }}>
+                {COLS.map(col => (
+                  <th key={col.key} style={{ padding:'10px 14px', textAlign: col.num ? 'right' : 'left',
+                    fontSize:10, fontWeight:600, color:'#6b7280',
+                    textTransform:'uppercase', letterSpacing:'.5px', whiteSpace:'nowrap' }}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={COLS.length} style={{ textAlign:'center', padding:30, color:'#6b7280' }}>Cargando…</td></tr>}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={COLS.length} style={{ textAlign:'center', padding:30, color:'#9ca3af', fontSize:12 }}>
+                  Sin registros — importa un archivo Excel SAP Logon.
+                </td></tr>
+              )}
+              {!loading && items.map((row, i) => (
+                <tr key={row.id} style={{ borderBottom:'1px solid #f3f4f6' }}
+                  onMouseEnter={e => e.currentTarget.style.background='#fafafa'}
+                  onMouseLeave={e => e.currentTarget.style.background=''}>
+                  {COLS.map(col => (
+                    <td key={col.key} style={{
+                      padding:'9px 14px',
+                      textAlign: col.num ? 'right' : 'left',
+                      fontFamily: col.mono ? 'monospace' : 'inherit',
+                      color: col.color || (col.num ? '#059669' : '#374151'),
+                      fontWeight: col.key === 'material' ? 700 : col.num ? 600 : 400,
+                      maxWidth: col.wide ? 260 : undefined,
+                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'
+                    }}>
+                      {col.key === 'stock'
+                        ? Number(row[col.key]).toLocaleString()
+                        : row[col.key] || '—'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {pages > 1 && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+            padding:'10px 14px', borderTop:'1px solid #e5e7eb' }}>
+            <span style={{ fontSize:12, color:'#6b7280' }}>Página {page} de {pages} · {count.toLocaleString()} registros</span>
+            <div style={{ display:'flex', gap:6 }}>
+              <button className="btn-ghost" style={{ padding:'4px 10px', fontSize:11 }}
+                disabled={page===1} onClick={() => setPage(p=>p-1)}>‹ Anterior</button>
+              <button className="btn-ghost" style={{ padding:'4px 10px', fontSize:11 }}
+                disabled={page>=pages} onClick={() => setPage(p=>p+1)}>Siguiente ›</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function CatalogPage() {
   const [tab, setTab] = useState('sap')
@@ -803,7 +951,7 @@ export default function CatalogPage() {
         <p className="text-sm mt-0.5" style={{ color:'#6b7280' }}>Gestión del catálogo SAP y tabla de Centros / Almacenes</p>
       </div>
       <div style={{ display:'flex', borderBottom:'1px solid #e5e7eb' }}>
-        {[['sap','Catálogo SAP'],['centros','Centros / Almacenes'],['partnumbers','Part Numbers']].map(([k,l]) => (
+        {[['sap','Catálogo SAP'],['centros','Centros / Almacenes'],['partnumbers','Part Numbers'],['stock','Stock SAP Logon']].map(([k,l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             padding:'8px 20px', background:'none', border:'none',
             borderBottom:`2px solid ${tab===k ? '#7c3aed' : 'transparent'}`,
@@ -816,6 +964,7 @@ export default function CatalogPage() {
       {tab==='sap'     && <SAPTab />}
       {tab==='centros' && <CentrosTab />}
       {tab==='partnumbers' && <PartNumbersTab />}
+      {tab==='stock' && <StockSAPTab />}
     </div>
   )
 }

@@ -203,3 +203,21 @@ class RMA(models.Model):
 
     def __str__(self):
         return f"RMA {self.solicitud or self.id}"
+
+
+# ─── Stock SAP Logon ───────────────────────────────────────────────────────────
+class StockSAP(models.Model):
+    material       = models.CharField(max_length=50)
+    descripcion    = models.CharField(max_length=500, blank=True, null=True)
+    stock          = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    lote           = models.CharField(max_length=100, blank=True, null=True)
+    centro         = models.CharField(max_length=50, blank=True, null=True)
+    almacen        = models.CharField(max_length=50, blank=True, null=True)
+    unidad_medida  = models.CharField(max_length=20, blank=True, null=True)
+
+    class Meta:
+        db_table = 'stock_sap'
+        ordering = ['material']
+
+    def __str__(self):
+        return f"{self.material} - {self.descripcion}"
